@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UnderDark ダメージ計算機（ツリー表示＋条件半透明）</title>
+
+<style>
+:root{
+  --bg:#0f1115;
+  --card:#171a21;
+  --panel:#0f1218;
+  --text:#e7e7ea;
+  --muted:#a9acb6;
+  --line:#262a33;
+  --line2:#2a2f3a;
+  --acc:#7aa2ff;
+  --warn:#ffcf7a;
+
+  --c-base:#e7e7ea;
+  --c-ab:#d7dbe6;
+
+  --c-stun:#8fb1ff;
+  --c-slow:#7be0ff;
+  --c-bleed:#ff7b86;
+  --c-poison:#7dffb0;
+  --c-burn:#ffb86b;
+  --c-immune:#c7a6ff;
+  --c-flying:#ffd36e;
+
+  --c-mondmg:#b7ffda;
+  --c-pick:#9ee7ff;
+}
+
+*{ box-sizing:border-box; }
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,"Segoe UI","Noto Sans JP",sans-serif;
+  background:var(--bg);
+  color:var(--text);
+
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.wrap{ max-width:1100px; margin:0 auto; padding:16px; }
+.top{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+h1{ font-size:18px; margin:0; }
+
+.tag{
+  border:1px solid var(--line2);
+  border-radius:999px;
+  padding:3px 9px;
+  font-size:12px;
+  color:var(--acc);
+  background:rgba(122,162,255,0.06);
+}
+
+.grid{ display:grid; gap:12px; align-items:start; }
+@media(min-width:920px){ .grid{ grid-template-columns:1fr 1fr; } }
+
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:14px;
+  box-shadow:0 0 0 1px rgba(0,0,0,0.12) inset;
+}
+
+.sectionTitle{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,0.03);
+  border-radius:12px;
+  margin-bottom:10px;
+}
+.sectionTitle h2{ font-size:14px; margin:0; }
+.sectionTitle .mini{ font-size:12px; color:var(--muted); }
+
+.row{
+  display:grid;
+  grid-template-columns:minmax(180px,1fr) minmax(220px,360px);
+  gap:10px;
+  margin:10px 0;
+  align-items:center;
+}
+@media(max-width:720px){ .row{ grid-template-columns:1fr; } }
+
+label{ font-size:13px; color:var(--muted); line-height:1.4; }
+
+input{
+  width:100%;
+  padding:10px 11px;
+  border-radius:10px;
+  border:1px solid var(--line2);
+  background:var(--panel);
+  color:var(--text);
+  outline:none;
+}
+input:focus{ border-color:#3a4252; }
+
+.small{ font-size:12px; color:var(--muted); }
+.mono{ font-family:ui-monospace,Menlo,Consolas,monospace; }
+
+.checkGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:8px;
+}
+@media(max-width:720px){ .checkGrid{ grid-template-columns:1fr; } }
+
+.checkItem{
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel);
+  display:flex;
+  align-items:center;
+  min-height:48px;
+}
+.checkRow{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  width:100%;
+}
+input.ab,input.cond{
+  width:auto;
+  margin:0;
+  flex:0 0 auto;
+  margin-top:2px;
+}
+.checkText{
+  cursor:pointer;
+  user-select:none;
+  color:var(--text);
+  font-size:13px;
+  line-height:1.25;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+
+.kpi{ display:grid; gap:10px; }
+@media(min-width:920px){ .kpi{ grid-template-columns:1fr 1fr; } }
+@media(max-width:720px){ .kpi{ grid-template-columns:1fr; } }
+
+.box{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px;
+  min-height:90px;
+}
+.v{ font-size:22px; margin-top:6px; }
+
+details{
+  margin-top:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel);
+  padding:10px 12px;
+  transition: opacity .15s ease;
+}
+details.isDim{ opacity:.45; }
+
+/* 条件OFF時は操作不可（誤入力防止） */
+details.isDisabled summary{ cursor:not-allowed; opacity:.75; }
+details.isDisabled{ pointer-events:none; }
+details.isDisabled summary{ pointer-events:none; }
+
+summary{
+  cursor:pointer;
+  color:var(--acc);
+  font-size:13px;
+  list-style:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+summary::-webkit-details-marker{ display:none; }
+
+.badge{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid var(--line2);
+  font-size:12px;
+  color:var(--muted);
+}
+
+.dimNote{
+  display:none;
+  font-size:12px;
+  color:var(--warn);
+  margin-top:6px;
+}
+details.isDim .dimNote{ display:block; }
+details.isDisabled .dimNote{ display:block; }
+
+.btnRow{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+button{
+  padding:9px 10px;
+  border-radius:10px;
+  border:1px solid var(--line2);
+  background:#101420;
+  color:var(--text);
+  cursor:pointer;
+}
+button:hover{ border-color:#3a4252; }
+
+.stack{ display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.entryItem{
+  display:grid;
+  grid-template-columns:1fr 140px 80px;
+  gap:8px;
+  align-items:center;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:rgba(0,0,0,0.18);
+}
+@media(max-width:720px){ .entryItem{ grid-template-columns:1fr; } }
+
+pre{
+  margin-top:8px;
+  padding:10px;
+  background:#0b0e13;
+  border:1px solid var(--line);
+  border-radius:10px;
+  font-size:12px;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
+.t-base{ color:var(--c-base); }
+.t-ab{ color:var(--c-ab); }
+.t-stun{ color:var(--c-stun); }
+.t-slow{ color:var(--c-slow); }
+.t-bleed{ color:var(--c-bleed); }
+.t-poison{ color:var(--c-poison); }
+.t-burn{ color:var(--c-burn); }
+.t-immune{ color:var(--c-immune); }
+.t-flying{ color:var(--c-flying); }
+.t-mondmg{ color:var(--c-mondmg); }
+.t-pick{ color:var(--c-pick); }
+.t-dim{ color:rgba(231,231,234,0.55); }
+
+.seg{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.seg button{ background:rgba(255,255,255,0.02); }
+.seg button.active{
+  border-color:#3a4252;
+  background:rgba(122,162,255,0.10);
+}
+.copyRow{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.toast{ margin-top:8px; font-size:12px; color:var(--muted); }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>ダメージ計算機</h1>
+    <span class="tag">スマホ互換（replaceAll/?.なし）</span>
+    <span class="tag">テキスト入力 初期未入力</span>
+    <span class="tag">ツルハシ ATK増加</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="sectionTitle">
+        <h2>基本情報</h2>
+        <div class="mini">攻撃力・クリティカル</div>
+      </div>
+
+      <div class="row">
+        <label>攻撃力（ATK）</label>
+        <input id="atk" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+      </div>
+
+      <div class="row">
+        <label>クリティカル率（%）</label>
+        <input id="cr" type="number" value="" placeholder="未入力なら0" min="0" max="100" step="0.1">
+      </div>
+
+      <div class="row">
+        <label>クリティカルダメージ（%）<br><span class="small">例：+1012% → 1012</span></label>
+        <input id="cd" type="number" value="" placeholder="未入力なら0" min="0" step="0.1">
+      </div>
+
+      <div class="row">
+        <label>モンスターが受けるダメージが増加（%）<br><span class="small">例：400% → 400（= 5.0倍）</span></label>
+        <input id="monDmg" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+      </div>
+
+      <div class="sectionTitle" style="margin-top:14px;">
+        <h2>ツルハシ</h2>
+        <div class="mini">所持数 × X% だけ全体ATK増加（ATKに乗算）</div>
+      </div>
+
+      <div class="row">
+        <label>ツルハシの所持数</label>
+        <input id="pickCount" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+      </div>
+
+      <div class="row">
+        <label>タワーリストにあるツルハシの数だけX％全体の攻撃力増加<br><span class="small">X（% / 1本）</span></label>
+        <input id="pickPct" type="number" value="" placeholder="未入力なら0" min="0" step="0.1">
+      </div>
+
+      <div class="sectionTitle" style="margin-top:14px;">
+        <h2>状態異常</h2>
+        <div class="mini">※免疫は状態異常数に含めない / リスト表示もしない</div>
+      </div>
+
+      <div class="checkGrid">
+        <div class="checkItem"><div class="checkRow">
+          <input id="ab_bleed" class="ab" data-key="bleed" type="checkbox">
+          <label class="checkText" for="ab_bleed">出血</label>
+        </div></div>
+
+        <div class="checkItem"><div class="checkRow">
+          <input id="ab_stun" class="ab" data-key="stun" type="checkbox">
+          <label class="checkText" for="ab_stun">スタン</label>
+        </div></div>
+
+        <div class="checkItem"><div class="checkRow">
+          <input id="ab_poison" class="ab" data-key="poison" type="checkbox">
+          <label class="checkText" for="ab_poison">中毒</label>
+        </div></div>
+
+        <div class="checkItem"><div class="checkRow">
+          <input id="ab_burn" class="ab" data-key="burn" type="checkbox">
+          <label class="checkText" for="ab_burn">火傷</label>
+        </div></div>
+
+        <div class="checkItem"><div class="checkRow">
+          <input id="ab_slow" class="ab" data-key="slow" type="checkbox">
+          <label class="checkText" for="ab_slow">移動速度減少（長文でも折り返しOK）</label>
+        </div></div>
+
+        <div class="checkItem"><div class="checkRow">
+          <input id="ab_immune" class="ab" data-key="immune" type="checkbox">
+          <label class="checkText" for="ab_immune">免疫（状態異常数に含めない / リスト表示もしない）</label>
+        </div></div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <label>状態異常1つごとのダメージ（%）</label>
+        <input id="abPer" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+      </div>
+
+      <div class="sectionTitle" style="margin-top:14px;">
+        <h2>対象条件</h2>
+        <div class="mini">飛行は状態異常数に含めない</div>
+      </div>
+
+      <div class="checkGrid">
+        <div class="checkItem"><div class="checkRow">
+          <input id="cond_flying" class="cond" type="checkbox">
+          <label class="checkText" for="cond_flying">飛行（対象）</label>
+        </div></div>
+      </div>
+
+      <details id="acc_stun">
+        <summary><span>スタン追撃 <span class="badge">各種</span></span><span>条件: スタン</span></summary>
+        <div class="dimNote">スタンがOFFのため不適用（半透明・操作不可）</div>
+        <div class="stack" id="list_stun"></div>
+        <div class="btnRow"><button type="button" data-add="stun">追加</button><button type="button" data-clear="stun">全削除</button></div>
+      </details>
+
+      <details id="acc_slow">
+        <summary><span>スロー追撃 <span class="badge">各種</span></span><span>条件: 移動速度減少</span></summary>
+        <div class="dimNote">移動速度減少がOFFのため不適用（半透明・操作不可）</div>
+        <div class="stack" id="list_slow"></div>
+        <div class="btnRow"><button type="button" data-add="slow">追加</button><button type="button" data-clear="slow">全削除</button></div>
+      </details>
+
+      <details id="acc_bleed">
+        <summary><span>出血追撃 <span class="badge">各種</span></span><span>条件: 出血</span></summary>
+        <div class="dimNote">出血がOFFのため不適用（半透明・操作不可）</div>
+        <div class="stack" id="list_bleed"></div>
+        <div class="btnRow"><button type="button" data-add="bleed">追加</button><button type="button" data-clear="bleed">全削除</button></div>
+      </details>
+
+      <details id="acc_poison">
+        <summary><span>中毒追撃 <span class="badge">各種</span></span><span>条件: 中毒</span></summary>
+        <div class="dimNote">中毒がOFFのため不適用（半透明・操作不可）</div>
+        <div class="stack" id="list_poison"></div>
+        <div class="btnRow"><button type="button" data-add="poison">追加</button><button type="button" data-clear="poison">全削除</button></div>
+      </details>
+
+      <details id="acc_burn">
+        <summary><span>火傷追撃 <span class="badge">各種</span></span><span>条件: 火傷</span></summary>
+        <div class="dimNote">火傷がOFFのため不適用（半透明・操作不可）</div>
+        <div class="stack" id="list_burn"></div>
+        <div class="btnRow"><button type="button" data-add="burn">追加</button><button type="button" data-clear="burn">全削除</button></div>
+      </details>
+
+      <details id="acc_immune">
+        <summary><span>免疫追撃 <span class="badge">各種</span></span><span>条件: 免疫</span></summary>
+        <div class="dimNote">免疫がOFFのため不適用（半透明・操作不可）</div>
+        <div class="stack" id="list_immune"></div>
+        <div class="btnRow"><button type="button" data-add="immune">追加</button><button type="button" data-clear="immune">全削除</button></div>
+      </details>
+
+      <details id="acc_flying">
+        <summary><span>飛行追撃 <span class="badge">各種</span></span><span>条件: 飛行（対象）</span></summary>
+        <div class="dimNote">飛行（対象）がOFFのため不適用（半透明・操作不可）</div>
+        <div class="stack" id="list_flying"></div>
+        <div class="btnRow"><button type="button" data-add="flying">追加</button><button type="button" data-clear="flying">全削除</button></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="kpi">
+        <div class="box">
+          <div class="small">基本1発期待ダメ</div>
+          <div id="outBase" class="mono v">-</div>
+        </div>
+        <div class="box">
+          <div class="small">状態異常数（免疫除外）</div>
+          <div id="outAbCount" class="mono v">-</div>
+          <div id="outAbList" class="small mono">-</div>
+        </div>
+        <div class="box">
+          <div class="small">最終1発ダメージ</div>
+          <div id="outFinal" class="mono v">-</div>
+        </div>
+      </div>
+
+      <details open>
+        <summary>最終式ツリー</summary>
+
+        <div class="seg">
+          <button type="button" id="btnTreeColor" class="active">色付き（見やすい）</button>
+          <button type="button" id="btnTreeText">純テキスト（コピー向け）</button>
+        </div>
+
+        <div class="copyRow">
+          <button type="button" id="btnCopyTree">ツリーをコピー</button>
+        </div>
+        <div id="copyToast" class="toast" style="display:none;">コピーしました</div>
+
+        <pre id="treeColor"></pre>
+        <pre id="treeText" style="display:none;"></pre>
+      </details>
+
+      <details>
+        <summary>内部データ</summary>
+        <pre id="debug"></pre>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function $$(q){ return Array.prototype.slice.call(document.querySelectorAll(q)); }
+
+function fmtInt(n){
+  if(!isFinite(n)) return "-";
+  return Math.round(n).toLocaleString("ja-JP");
+}
+
+/* iOS古め対策：replaceAll/optional chaining を使わない */
+function escapeHtml(s){
+  s = String(s);
+  s = s.replace(/&/g,"&amp;");
+  s = s.replace(/</g,"&lt;");
+  s = s.replace(/>/g,"&gt;");
+  s = s.replace(/"/g,"&quot;");
+  s = s.replace(/'/g,"&#39;");
+  return s;
+}
+
+function makeRow(kind, name, pct){
+  if(typeof name === "undefined") name = "";
+  if(typeof pct === "undefined") pct = "";
+  var row = document.createElement("div");
+  row.className = "entryItem";
+  row.innerHTML =
+    '<input type="text" class="entryName" placeholder="名称（例：装備 / マウント / 武器 など）" value="'+ escapeHtml(name) +'">' +
+    '<input type="number" class="entryPct" min="0" step="1" value="'+ (pct === "" ? "" : escapeHtml(String(pct))) +'" placeholder="未入力なら0">' +
+    '<button type="button" class="btnDel">削除</button>';
+
+  row.querySelector(".btnDel").addEventListener("click", function(){ row.remove(); calc(); });
+  row.querySelector(".entryName").addEventListener("input", calc);
+  row.querySelector(".entryPct").addEventListener("input", calc);
+  return row;
+}
+
+function listEntries(kind){
+  var rows = $$("#list_"+kind+" .entryItem");
+  var out = [];
+  for(var i=0;i<rows.length;i++){
+    var r = rows[i];
+    var nameEl = r.querySelector(".entryName");
+    var pctEl  = r.querySelector(".entryPct");
+    var name = (nameEl && nameEl.value) ? nameEl.value.trim() : "";
+    var pctRaw = (pctEl && typeof pctEl.value !== "undefined") ? pctEl.value : "";
+    var pct = Number((pctRaw === "" ? 0 : pctRaw) || 0);
+    pct = Math.max(0, pct);
+    if(name !== "" || pct !== 0) out.push({name:name, pct:pct});
+  }
+  return out;
+}
+function sumPct(entries){
+  var a = 0;
+  for(var i=0;i<entries.length;i++) a += (Number(entries[i].pct)||0);
+  return a;
+}
+function multFromSum(sum){ return 1 + Math.max(0, sum) / 100; }
+
+function getAbnormal(){
+  var checked = [];
+  var abs = $$("input.ab");
+  for(var i=0;i<abs.length;i++){
+    if(abs[i].checked) checked.push(abs[i].getAttribute("data-key"));
+  }
+  var count = 0;
+  var listed = [];
+  for(var j=0;j<checked.length;j++){
+    if(checked[j] !== "immune"){ count++; listed.push(checked[j]); }
+  }
+  return { checked:checked, count:count, listed:listed };
+}
+
+function setDimAndDisable(accId, isActive){
+  var d = $(accId);
+  if(!d) return;
+  if(!isActive){
+    d.classList.add("isDim");
+    d.classList.add("isDisabled");
+    d.open = false;
+  }else{
+    d.classList.remove("isDim");
+    d.classList.remove("isDisabled");
+  }
+}
+
+function treeLineHtml(cls, s){ return '<span class="'+cls+'">'+ escapeHtml(s) +'</span><br>'; }
+function treeLineText(s){ return s + "\n"; }
+
+function copyTextToClipboard(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text).then(function(){ return true; }).catch(function(){ return false; });
+  }
+  try{
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+    return Promise.resolve(true);
+  }catch(e){
+    return Promise.resolve(false);
+  }
+}
+
+function setTreeMode(mode){
+  var isColor = (mode === "color");
+  $("btnTreeColor").classList.toggle("active", isColor);
+  $("btnTreeText").classList.toggle("active", !isColor);
+  $("treeColor").style.display = isColor ? "" : "none";
+  $("treeText").style.display  = isColor ? "none" : "";
+}
+
+function calc(){
+  var atkRaw = $("atk").value;
+  var crRaw  = $("cr").value;
+  var cdRaw  = $("cd").value;
+  var monRaw = $("monDmg").value;
+  var abPerRaw = $("abPer").value;
+
+  var pickCountRaw = $("pickCount").value;
+  var pickPctRaw   = $("pickPct").value;
+
+  var atk = Math.max(0, Number((atkRaw === "" ? 0 : atkRaw) || 0));
+  var cr  = Math.min(100, Math.max(0, Number((crRaw === "" ? 0 : crRaw) || 0))) / 100;
+  var cd  = Math.max(0, Number((cdRaw === "" ? 0 : cdRaw) || 0)) / 100;
+
+  var monDmgPct = Math.max(0, Number((monRaw === "" ? 0 : monRaw) || 0));
+  var monDmgMult = 1 + (monDmgPct / 100);
+
+  var pickCount = Math.max(0, Math.floor(Number((pickCountRaw === "" ? 0 : pickCountRaw) || 0)));
+  var pickPctPer = Math.max(0, Number((pickPctRaw === "" ? 0 : pickPctRaw) || 0));
+  var pickMult = 1 + (pickCount * (pickPctPer / 100));
+  var atkEff = atk * pickMult;
+
+  var base = atkEff * ((1 - cr) + (1 + cd) * cr);
+
+  var abPerPct = Math.max(0, Number((abPerRaw === "" ? 0 : abPerRaw) || 0));
+  var ab = getAbnormal();
+  var abMult = 1 + ab.count * (abPerPct / 100);
+
+  var apply = {
+    stun:  ab.checked.indexOf("stun") >= 0,
+    slow:  ab.checked.indexOf("slow") >= 0,
+    bleed: ab.checked.indexOf("bleed") >= 0,
+    poison:ab.checked.indexOf("poison") >= 0,
+    burn:  ab.checked.indexOf("burn") >= 0,
+    immune:ab.checked.indexOf("immune") >= 0,
+    flying: $("cond_flying").checked
+  };
+
+  setDimAndDisable("acc_stun", apply.stun);
+  setDimAndDisable("acc_slow", apply.slow);
+  setDimAndDisable("acc_bleed", apply.bleed);
+  setDimAndDisable("acc_poison", apply.poison);
+  setDimAndDisable("acc_burn", apply.burn);
+  setDimAndDisable("acc_immune", apply.immune);
+  setDimAndDisable("acc_flying", apply.flying);
+
+  var kinds = ["stun","slow","bleed","poison","burn","immune","flying"];
+  var sums = {};
+  var mults = {};
+  var used = {};
+  var entries = {};
+
+  for(var i=0;i<kinds.length;i++){
+    var k = kinds[i];
+    entries[k] = listEntries(k);
+    sums[k] = sumPct(entries[k]);
+    mults[k] = multFromSum(sums[k]);
+    used[k] = apply[k] ? mults[k] : 1;
+  }
+
+  var final =
+    base * monDmgMult * abMult *
+    used.stun * used.slow * used.bleed * used.poison * used.burn *
+    used.immune * used.flying;
+
+  $("outBase").textContent = fmtInt(base);
+  $("outAbCount").textContent = String(ab.count);
+  $("outAbList").textContent = (ab.listed.length ? ab.listed.join(" / ") : "(なし)");
+  $("outFinal").textContent = fmtInt(final);
+
+  var tHtml = "";
+  var tText = "";
+
+  tHtml += treeLineHtml("t-base", "Final = Base × MonsterTaken × Abnormal × (追撃各種...)");
+  tHtml += treeLineHtml("t-base", "");
+  tText += treeLineText("Final = Base × MonsterTaken × Abnormal × (追撃各種...)");
+  tText += treeLineText("");
+
+  tHtml += treeLineHtml("t-pick", "Pickaxe（ツルハシATK増加）");
+  tHtml += treeLineHtml("t-pick", "├─ count = " + pickCount);
+  tHtml += treeLineHtml("t-pick", "├─ per = " + pickPctPer + "% / 本");
+  tHtml += treeLineHtml("t-pick", "├─ PickaxeMult = 1 + count×per/100 = " + (String(pickMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tHtml += treeLineHtml("t-pick", "└─ ATK effective = " + fmtInt(atk) + " × " + (String(pickMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + " = " + fmtInt(atkEff));
+  tHtml += treeLineHtml("t-base", "");
+
+  tText += treeLineText("Pickaxe（ツルハシATK増加）");
+  tText += treeLineText("├─ count = " + pickCount);
+  tText += treeLineText("├─ per = " + pickPctPer + "% / 本");
+  tText += treeLineText("├─ PickaxeMult = 1 + count×per/100 = " + (String(pickMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tText += treeLineText("└─ ATK effective = " + fmtInt(atk) + " × " + (String(pickMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + " = " + fmtInt(atkEff));
+  tText += treeLineText("");
+
+  tHtml += treeLineHtml("t-base", "Base");
+  tHtml += treeLineHtml("t-base", "├─ ATK(eff): " + fmtInt(atkEff) + " / CR: " + (cr*100).toFixed(1) + "% / CD: " + (cd*100).toFixed(1) + "%");
+  tHtml += treeLineHtml("t-base", "└─ Base = " + fmtInt(base));
+  tHtml += treeLineHtml("t-base", "");
+
+  tText += treeLineText("Base");
+  tText += treeLineText("├─ ATK(eff): " + fmtInt(atkEff) + " / CR: " + (cr*100).toFixed(1) + "% / CD: " + (cd*100).toFixed(1) + "%");
+  tText += treeLineText("└─ Base = " + fmtInt(base));
+  tText += treeLineText("");
+
+  tHtml += treeLineHtml("t-mondmg", "MonsterTaken（モンスターが受けるダメージ増加）");
+  tHtml += treeLineHtml("t-mondmg", "├─ +" + monDmgPct + "%");
+  tHtml += treeLineHtml("t-mondmg", "└─ MonsterTakenMult = " + (String(monDmgMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tHtml += treeLineHtml("t-base", "");
+
+  tText += treeLineText("MonsterTaken（モンスターが受けるダメージ増加）");
+  tText += treeLineText("├─ +" + monDmgPct + "%");
+  tText += treeLineText("└─ MonsterTakenMult = " + (String(monDmgMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tText += treeLineText("");
+
+  tHtml += treeLineHtml("t-ab", "Abnormal（免疫除外）");
+  tHtml += treeLineHtml("t-ab", "├─ count = " + ab.count);
+  tHtml += treeLineHtml("t-ab", "├─ per = " + abPerPct + "%");
+  tHtml += treeLineHtml("t-ab", "└─ AbnormalMult = " + (String(abMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tHtml += treeLineHtml("t-ab", "");
+
+  tText += treeLineText("Abnormal（免疫除外）");
+  tText += treeLineText("├─ count = " + ab.count);
+  tText += treeLineText("├─ per = " + abPerPct + "%");
+  tText += treeLineText("└─ AbnormalMult = " + (String(abMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tText += treeLineText("");
+
+  function addFactor(title, key, cls, condName){
+    var isOn = !!apply[key];
+    var sum = sums[key];
+    var mult = mults[key];
+    var u = used[key];
+    tHtml += treeLineHtml(cls, title);
+    tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ 条件: " + condName + " → " + (isOn ? "適用" : "不適用"));
+    tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ Σ% = " + String(sum.toFixed(3)).replace(/\.?0+$/,"") + "%");
+    tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ Mult = " + String(mult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+    tHtml += treeLineHtml(isOn ? cls : "t-dim", "└─ Used = " + String(u.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+    tHtml += treeLineHtml("t-base", "");
+
+    tText += treeLineText(title);
+    tText += treeLineText("├─ 条件: " + condName + " → " + (isOn ? "適用" : "不適用"));
+    tText += treeLineText("├─ Σ% = " + String(sum.toFixed(3)).replace(/\.?0+$/,"") + "%");
+    tText += treeLineText("├─ Mult = " + String(mult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+    tText += treeLineText("└─ Used = " + String(u.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+    tText += treeLineText("");
+  }
+
+  addFactor("Stun 追撃（各種）", "stun", "t-stun", "スタンON");
+  addFactor("Slow 追撃（各種）", "slow", "t-slow", "移動速度減少ON");
+  addFactor("Bleed 追撃（各種）", "bleed", "t-bleed", "出血ON");
+  addFactor("Poison 追撃（各種）", "poison", "t-poison", "中毒ON");
+  addFactor("Burn 追撃（各種）", "burn", "t-burn", "火傷ON");
+  addFactor("Immune 追撃（各種）", "immune", "t-immune", "免疫ON");
+  addFactor("Flying 追撃（各種）", "flying", "t-flying", "飛行（対象）ON");
+
+  tHtml += treeLineHtml("t-base", "Final");
+  tHtml += treeLineHtml("t-base", "├─ Base: " + fmtInt(base));
+  tHtml += treeLineHtml("t-mondmg", "├─ MonsterTaken: " + String(monDmgMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-ab", "├─ Abnormal: " + String(abMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-stun", "├─ Stun: " + String(used.stun.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-slow", "├─ Slow: " + String(used.slow.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-bleed", "├─ Bleed: " + String(used.bleed.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-poison", "├─ Poison: " + String(used.poison.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-burn", "├─ Burn: " + String(used.burn.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-immune", "├─ Immune: " + String(used.immune.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-flying", "├─ Flying: " + String(used.flying.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-base", "└─ Final = " + fmtInt(final));
+
+  tText += treeLineText("Final");
+  tText += treeLineText("├─ Base: " + fmtInt(base));
+  tText += treeLineText("├─ MonsterTaken: " + String(monDmgMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ Abnormal: " + String(abMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ Stun: " + String(used.stun.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ Slow: " + String(used.slow.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ Bleed: " + String(used.bleed.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ Poison: " + String(used.poison.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ Burn: " + String(used.burn.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ Immune: " + String(used.immune.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ Flying: " + String(used.flying.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("└─ Final = " + fmtInt(final));
+
+  $("treeColor").innerHTML = tHtml;
+  $("treeText").textContent = tText;
+
+  $("debug").textContent = JSON.stringify({
+    base: { atk:atk, atkEff:atkEff, pickCount:pickCount, pickPctPer:pickPctPer, pickMult:pickMult, cr:cr, cd:cd, base:base },
+    monsterTaken: { pct: monDmgPct, mult: monDmgMult },
+    abnormal: { checked: ab.checked, listed: ab.listed, count: ab.count, perPct: abPerPct, mult: abMult },
+    apply: apply,
+    sums: sums,
+    mults: mults,
+    used: used,
+    final: final
+  }, null, 2);
+}
+
+function wireButtons(){
+  var addBtns = $$('button[data-add]');
+  for(var i=0;i<addBtns.length;i++){
+    (function(btn){
+      btn.addEventListener("click", function(){
+        var kind = btn.getAttribute("data-add");
+        $("list_"+kind).appendChild(makeRow(kind, "", ""));
+        $("acc_"+kind).open = true;
+        calc();
+      });
+    })(addBtns[i]);
+  }
+  var clearBtns = $$('button[data-clear]');
+  for(var j=0;j<clearBtns.length;j++){
+    (function(btn){
+      btn.addEventListener("click", function(){
+        var kind = btn.getAttribute("data-clear");
+        $("list_"+kind).innerHTML = "";
+        calc();
+      });
+    })(clearBtns[j]);
+  }
+}
+
+function wireTreeUI(){
+  $("btnTreeColor").addEventListener("click", function(){ setTreeMode("color"); });
+  $("btnTreeText").addEventListener("click", function(){ setTreeMode("text"); });
+  $("btnCopyTree").addEventListener("click", function(){
+    var txt = $("treeText").textContent || "";
+    copyTextToClipboard(txt).then(function(ok){
+      var toast = $("copyToast");
+      toast.style.display = "";
+      toast.textContent = ok ? "コピーしました（純テキスト）" : "コピーに失敗しました";
+      setTimeout(function(){ toast.style.display="none"; }, 1200);
+    });
+  });
+}
+
+["atk","cr","cd","monDmg","pickCount","pickPct","abPer"].forEach(function(id){
+  $(id).addEventListener("input", calc);
+  $(id).addEventListener("change", calc);
+});
+$$("input.ab").forEach(function(x){ x.addEventListener("change", calc); });
+$("cond_flying").addEventListener("change", calc);
+
+wireButtons();
+wireTreeUI();
+setTreeMode("color");
+calc();
+</script>
+</body>
+</html>
