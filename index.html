@@ -38,7 +38,6 @@ body{
   font-family:system-ui,-apple-system,"Segoe UI","Noto Sans JP",sans-serif;
   background:var(--bg);
   color:var(--text);
-
   word-break: normal;
   overflow-wrap: anywhere;
 }
@@ -168,9 +167,8 @@ details{
 details.isDim{ opacity:.45; }
 
 /* 条件OFF時は操作不可（誤入力防止） */
-details.isDisabled summary{ cursor:not-allowed; opacity:.75; }
 details.isDisabled{ pointer-events:none; }
-details.isDisabled summary{ pointer-events:none; }
+details.isDisabled summary{ cursor:not-allowed; opacity:.75; }
 
 summary{
   cursor:pointer;
@@ -448,6 +446,7 @@ pre{
 
         <div class="copyRow">
           <button type="button" id="btnCopyTree">ツリーをコピー</button>
+          <button type="button" id="btnClearSave">保存データを消す</button>
         </div>
         <div id="copyToast" class="toast" style="display:none;">コピーしました</div>
 
@@ -483,6 +482,13 @@ function escapeHtml(s){
   return s;
 }
 
+function trimZero4(x){
+  // 1.2300 -> 1.23 / 1.0000 -> 1
+  var s = String(x.toFixed(4));
+  s = s.replace(/0+$/,"").replace(/\.$/,"");
+  return s;
+}
+
 function makeRow(kind, name, pct){
   if(typeof name === "undefined") name = "";
   if(typeof pct === "undefined") pct = "";
@@ -500,7 +506,9 @@ function makeRow(kind, name, pct){
 }
 
 function listEntries(kind){
-  var rows = $$("#list_"+kind+" .entryItem");
+  var host = $("list_"+kind);
+  if(!host) return [];
+  var rows = host.querySelectorAll(".entryItem");
   var out = [];
   for(var i=0;i<rows.length;i++){
     var r = rows[i];
@@ -571,13 +579,108 @@ function copyTextToClipboard(text){
 }
 
 function setTreeMode(mode){
+  window.__TREE_MODE__ = mode;
   var isColor = (mode === "color");
   $("btnTreeColor").classList.toggle("active", isColor);
   $("btnTreeText").classList.toggle("active", !isColor);
   $("treeColor").style.display = isColor ? "" : "none";
   $("treeText").style.display  = isColor ? "none" : "";
+  scheduleSave();
 }
 
+/* ----------------------------
+   LocalStorage Auto Save / Load
+---------------------------- */
+var STORAGE_KEY = "underdark_damage_calc_tree_v1";
+var _saveTimer = null;
+
+function scheduleSave(){
+  if(_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(function(){
+    _saveTimer = null;
+    saveState();
+  }, 250);
+}
+
+function saveState(){
+  try{
+    var state = { v: 1, t: Date.now(), inputs: {}, lists: {}, treeMode: (window.__TREE_MODE__||"color") };
+
+    // inputs with id
+    var nodes = $$("input[id], select[id], textarea[id]");
+    for(var i=0;i<nodes.length;i++){
+      var el = nodes[i];
+      var id = el.id;
+      if(!id) continue;
+      var tag = (el.tagName||"").toLowerCase();
+      var type = (el.getAttribute("type")||"").toLowerCase();
+      if(tag==="input" && (type==="checkbox" || type==="radio")){
+        state.inputs[id] = {t:"c", v: !!el.checked};
+      }else{
+        state.inputs[id] = {t:"v", v: (typeof el.value!=="undefined" ? el.value : "")};
+      }
+    }
+
+    // lists (現行UIのkindに合わせる)
+    var kinds = ["stun","slow","bleed","poison","burn","immune","flying"];
+    for(var k=0;k<kinds.length;k++){
+      var kind = kinds[k];
+      state.lists[kind] = listEntries(kind);
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }catch(e){
+    // ignore
+  }
+}
+
+function loadState(){
+  try{
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    var state = JSON.parse(raw);
+    if(!state || !state.inputs) return;
+
+    if(state.treeMode) window.__TREE_MODE__ = state.treeMode;
+
+    // restore inputs
+    for(var id in state.inputs){
+      if(!Object.prototype.hasOwnProperty.call(state.inputs, id)) continue;
+      var item = state.inputs[id];
+      var el = $(id);
+      if(!el) continue;
+      if(item.t==="c"){
+        el.checked = !!item.v;
+      }else{
+        el.value = (item.v==null ? "" : String(item.v));
+      }
+    }
+
+    // restore lists
+    if(state.lists){
+      for(var kind in state.lists){
+        if(!Object.prototype.hasOwnProperty.call(state.lists, kind)) continue;
+        var host = $("list_"+kind);
+        if(!host) continue;
+        host.innerHTML = "";
+        var arr = state.lists[kind] || [];
+        for(var i=0;i<arr.length;i++){
+          host.appendChild(makeRow(kind, arr[i].name || "", Number(arr[i].pct || 0)));
+        }
+      }
+    }
+  }catch(e){
+    // ignore
+  }
+}
+
+function clearSaved(){
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+}
+
+/* ----------------------------
+   Main Calc
+---------------------------- */
 function calc(){
   var atkRaw = $("atk").value;
   var crRaw  = $("cr").value;
@@ -659,15 +762,15 @@ function calc(){
   tHtml += treeLineHtml("t-pick", "Pickaxe（ツルハシATK増加）");
   tHtml += treeLineHtml("t-pick", "├─ count = " + pickCount);
   tHtml += treeLineHtml("t-pick", "├─ per = " + pickPctPer + "% / 本");
-  tHtml += treeLineHtml("t-pick", "├─ PickaxeMult = 1 + count×per/100 = " + (String(pickMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
-  tHtml += treeLineHtml("t-pick", "└─ ATK effective = " + fmtInt(atk) + " × " + (String(pickMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + " = " + fmtInt(atkEff));
+  tHtml += treeLineHtml("t-pick", "├─ PickaxeMult = 1 + count×per/100 = " + trimZero4(pickMult) + "x");
+  tHtml += treeLineHtml("t-pick", "└─ ATK effective = " + fmtInt(atk) + " × " + trimZero4(pickMult) + " = " + fmtInt(atkEff));
   tHtml += treeLineHtml("t-base", "");
 
   tText += treeLineText("Pickaxe（ツルハシATK増加）");
   tText += treeLineText("├─ count = " + pickCount);
   tText += treeLineText("├─ per = " + pickPctPer + "% / 本");
-  tText += treeLineText("├─ PickaxeMult = 1 + count×per/100 = " + (String(pickMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
-  tText += treeLineText("└─ ATK effective = " + fmtInt(atk) + " × " + (String(pickMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + " = " + fmtInt(atkEff));
+  tText += treeLineText("├─ PickaxeMult = 1 + count×per/100 = " + trimZero4(pickMult) + "x");
+  tText += treeLineText("└─ ATK effective = " + fmtInt(atk) + " × " + trimZero4(pickMult) + " = " + fmtInt(atkEff));
   tText += treeLineText("");
 
   tHtml += treeLineHtml("t-base", "Base");
@@ -682,24 +785,24 @@ function calc(){
 
   tHtml += treeLineHtml("t-mondmg", "MonsterTaken（モンスターが受けるダメージ増加）");
   tHtml += treeLineHtml("t-mondmg", "├─ +" + monDmgPct + "%");
-  tHtml += treeLineHtml("t-mondmg", "└─ MonsterTakenMult = " + (String(monDmgMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tHtml += treeLineHtml("t-mondmg", "└─ MonsterTakenMult = " + trimZero4(monDmgMult) + "x");
   tHtml += treeLineHtml("t-base", "");
 
   tText += treeLineText("MonsterTaken（モンスターが受けるダメージ増加）");
   tText += treeLineText("├─ +" + monDmgPct + "%");
-  tText += treeLineText("└─ MonsterTakenMult = " + (String(monDmgMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tText += treeLineText("└─ MonsterTakenMult = " + trimZero4(monDmgMult) + "x");
   tText += treeLineText("");
 
   tHtml += treeLineHtml("t-ab", "Abnormal（免疫除外）");
   tHtml += treeLineHtml("t-ab", "├─ count = " + ab.count);
   tHtml += treeLineHtml("t-ab", "├─ per = " + abPerPct + "%");
-  tHtml += treeLineHtml("t-ab", "└─ AbnormalMult = " + (String(abMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tHtml += treeLineHtml("t-ab", "└─ AbnormalMult = " + trimZero4(abMult) + "x");
   tHtml += treeLineHtml("t-ab", "");
 
   tText += treeLineText("Abnormal（免疫除外）");
   tText += treeLineText("├─ count = " + ab.count);
   tText += treeLineText("├─ per = " + abPerPct + "%");
-  tText += treeLineText("└─ AbnormalMult = " + (String(abMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"")) + "x");
+  tText += treeLineText("└─ AbnormalMult = " + trimZero4(abMult) + "x");
   tText += treeLineText("");
 
   function addFactor(title, key, cls, condName){
@@ -707,18 +810,19 @@ function calc(){
     var sum = sums[key];
     var mult = mults[key];
     var u = used[key];
+
     tHtml += treeLineHtml(cls, title);
     tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ 条件: " + condName + " → " + (isOn ? "適用" : "不適用"));
     tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ Σ% = " + String(sum.toFixed(3)).replace(/\.?0+$/,"") + "%");
-    tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ Mult = " + String(mult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-    tHtml += treeLineHtml(isOn ? cls : "t-dim", "└─ Used = " + String(u.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+    tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ Mult = " + trimZero4(mult) + "x");
+    tHtml += treeLineHtml(isOn ? cls : "t-dim", "└─ Used = " + trimZero4(u) + "x");
     tHtml += treeLineHtml("t-base", "");
 
     tText += treeLineText(title);
     tText += treeLineText("├─ 条件: " + condName + " → " + (isOn ? "適用" : "不適用"));
     tText += treeLineText("├─ Σ% = " + String(sum.toFixed(3)).replace(/\.?0+$/,"") + "%");
-    tText += treeLineText("├─ Mult = " + String(mult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-    tText += treeLineText("└─ Used = " + String(u.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+    tText += treeLineText("├─ Mult = " + trimZero4(mult) + "x");
+    tText += treeLineText("└─ Used = " + trimZero4(u) + "x");
     tText += treeLineText("");
   }
 
@@ -732,28 +836,28 @@ function calc(){
 
   tHtml += treeLineHtml("t-base", "Final");
   tHtml += treeLineHtml("t-base", "├─ Base: " + fmtInt(base));
-  tHtml += treeLineHtml("t-mondmg", "├─ MonsterTaken: " + String(monDmgMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tHtml += treeLineHtml("t-ab", "├─ Abnormal: " + String(abMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tHtml += treeLineHtml("t-stun", "├─ Stun: " + String(used.stun.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tHtml += treeLineHtml("t-slow", "├─ Slow: " + String(used.slow.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tHtml += treeLineHtml("t-bleed", "├─ Bleed: " + String(used.bleed.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tHtml += treeLineHtml("t-poison", "├─ Poison: " + String(used.poison.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tHtml += treeLineHtml("t-burn", "├─ Burn: " + String(used.burn.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tHtml += treeLineHtml("t-immune", "├─ Immune: " + String(used.immune.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tHtml += treeLineHtml("t-flying", "├─ Flying: " + String(used.flying.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tHtml += treeLineHtml("t-mondmg", "├─ MonsterTaken: " + trimZero4(monDmgMult) + "x");
+  tHtml += treeLineHtml("t-ab", "├─ Abnormal: " + trimZero4(abMult) + "x");
+  tHtml += treeLineHtml("t-stun", "├─ Stun: " + trimZero4(used.stun) + "x");
+  tHtml += treeLineHtml("t-slow", "├─ Slow: " + trimZero4(used.slow) + "x");
+  tHtml += treeLineHtml("t-bleed", "├─ Bleed: " + trimZero4(used.bleed) + "x");
+  tHtml += treeLineHtml("t-poison", "├─ Poison: " + trimZero4(used.poison) + "x");
+  tHtml += treeLineHtml("t-burn", "├─ Burn: " + trimZero4(used.burn) + "x");
+  tHtml += treeLineHtml("t-immune", "├─ Immune: " + trimZero4(used.immune) + "x");
+  tHtml += treeLineHtml("t-flying", "├─ Flying: " + trimZero4(used.flying) + "x");
   tHtml += treeLineHtml("t-base", "└─ Final = " + fmtInt(final));
 
   tText += treeLineText("Final");
   tText += treeLineText("├─ Base: " + fmtInt(base));
-  tText += treeLineText("├─ MonsterTaken: " + String(monDmgMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tText += treeLineText("├─ Abnormal: " + String(abMult.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tText += treeLineText("├─ Stun: " + String(used.stun.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tText += treeLineText("├─ Slow: " + String(used.slow.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tText += treeLineText("├─ Bleed: " + String(used.bleed.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tText += treeLineText("├─ Poison: " + String(used.poison.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tText += treeLineText("├─ Burn: " + String(used.burn.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tText += treeLineText("├─ Immune: " + String(used.immune.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
-  tText += treeLineText("├─ Flying: " + String(used.flying.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + "x");
+  tText += treeLineText("├─ MonsterTaken: " + trimZero4(monDmgMult) + "x");
+  tText += treeLineText("├─ Abnormal: " + trimZero4(abMult) + "x");
+  tText += treeLineText("├─ Stun: " + trimZero4(used.stun) + "x");
+  tText += treeLineText("├─ Slow: " + trimZero4(used.slow) + "x");
+  tText += treeLineText("├─ Bleed: " + trimZero4(used.bleed) + "x");
+  tText += treeLineText("├─ Poison: " + trimZero4(used.poison) + "x");
+  tText += treeLineText("├─ Burn: " + trimZero4(used.burn) + "x");
+  tText += treeLineText("├─ Immune: " + trimZero4(used.immune) + "x");
+  tText += treeLineText("├─ Flying: " + trimZero4(used.flying) + "x");
   tText += treeLineText("└─ Final = " + fmtInt(final));
 
   $("treeColor").innerHTML = tHtml;
@@ -769,26 +873,36 @@ function calc(){
     used: used,
     final: final
   }, null, 2);
+
+  scheduleSave();
 }
 
+/* ----------------------------
+   UI wiring
+---------------------------- */
 function wireButtons(){
   var addBtns = $$('button[data-add]');
   for(var i=0;i<addBtns.length;i++){
     (function(btn){
       btn.addEventListener("click", function(){
         var kind = btn.getAttribute("data-add");
-        $("list_"+kind).appendChild(makeRow(kind, "", ""));
+        var host = $("list_"+kind);
+        if(!host) return;
+        host.appendChild(makeRow(kind, "", ""));
         $("acc_"+kind).open = true;
         calc();
       });
     })(addBtns[i]);
   }
+
   var clearBtns = $$('button[data-clear]');
   for(var j=0;j<clearBtns.length;j++){
     (function(btn){
       btn.addEventListener("click", function(){
         var kind = btn.getAttribute("data-clear");
-        $("list_"+kind).innerHTML = "";
+        var host = $("list_"+kind);
+        if(!host) return;
+        host.innerHTML = "";
         calc();
       });
     })(clearBtns[j]);
@@ -798,7 +912,9 @@ function wireButtons(){
 function wireTreeUI(){
   $("btnTreeColor").addEventListener("click", function(){ setTreeMode("color"); });
   $("btnTreeText").addEventListener("click", function(){ setTreeMode("text"); });
+
   $("btnCopyTree").addEventListener("click", function(){
+    // コピーは純テキスト固定
     var txt = $("treeText").textContent || "";
     copyTextToClipboard(txt).then(function(ok){
       var toast = $("copyToast");
@@ -807,8 +923,17 @@ function wireTreeUI(){
       setTimeout(function(){ toast.style.display="none"; }, 1200);
     });
   });
+
+  $("btnClearSave").addEventListener("click", function(){
+    clearSaved();
+    var toast = $("copyToast");
+    toast.style.display = "";
+    toast.textContent = "保存データを削除しました";
+    setTimeout(function(){ toast.style.display="none"; }, 1200);
+  });
 }
 
+/* input listeners */
 ["atk","cr","cd","monDmg","pickCount","pickPct","abPer"].forEach(function(id){
   $(id).addEventListener("input", calc);
   $(id).addEventListener("change", calc);
@@ -816,9 +941,13 @@ function wireTreeUI(){
 $$("input.ab").forEach(function(x){ x.addEventListener("change", calc); });
 $("cond_flying").addEventListener("change", calc);
 
+// save on tab close
+window.addEventListener("pagehide", function(){ saveState(); });
+
 wireButtons();
 wireTreeUI();
-setTreeMode("color");
+loadState();
+setTreeMode(window.__TREE_MODE__||"color");
 calc();
 </script>
 </body>
