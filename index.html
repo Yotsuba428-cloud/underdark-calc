@@ -30,6 +30,7 @@
 
   --c-mondmg:#b7ffda;
   --c-pick:#9ee7ff;
+  --c-heroatk:#ffd0ff;
 }
 
 *{ box-sizing:border-box; }
@@ -66,19 +67,6 @@ h1{ font-size:18px; margin:0; }
   box-shadow:0 0 0 1px rgba(0,0,0,0.12) inset;
 }
 
-.sectionTitle{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  padding:10px 12px;
-  border:1px solid var(--line);
-  background:rgba(255,255,255,0.03);
-  border-radius:12px;
-  margin-bottom:10px;
-}
-.sectionTitle h2{ font-size:14px; margin:0; }
-.sectionTitle .mini{ font-size:12px; color:var(--muted); }
-
 .row{
   display:grid;
   grid-template-columns:minmax(180px,1fr) minmax(220px,360px);
@@ -90,7 +78,7 @@ h1{ font-size:18px; margin:0; }
 
 label{ font-size:13px; color:var(--muted); line-height:1.4; }
 
-input{
+input, select{
   width:100%;
   padding:10px 11px;
   border-radius:10px;
@@ -99,10 +87,25 @@ input{
   color:var(--text);
   outline:none;
 }
-input:focus{ border-color:#3a4252; }
+input:focus, select:focus{ border-color:#3a4252; }
 
 .small{ font-size:12px; color:var(--muted); }
 .mono{ font-family:ui-monospace,Menlo,Consolas,monospace; }
+
+/* ATK unit input group */
+.inputGroup{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.inputGroup .unitSelect{
+  width:110px;
+  flex:0 0 auto;
+}
+@media(max-width:720px){
+  .inputGroup{ flex-wrap:wrap; }
+  .inputGroup .unitSelect{ width:140px; }
+}
 
 .checkGrid{
   display:grid;
@@ -152,10 +155,18 @@ input.ab,input.cond{
   border:1px solid var(--line);
   border-radius:12px;
   padding:12px;
-  min-height:90px;
+  min-height:92px;
 }
 .v{ font-size:22px; margin-top:6px; }
+.note{
+  margin-top:6px;
+  font-size:12px;
+  color:var(--warn);
+  line-height:1.35;
+}
+.note.muted{ color:var(--muted); }
 
+/* ---------- details base ---------- */
 details{
   margin-top:12px;
   border:1px solid var(--line);
@@ -240,6 +251,7 @@ pre{
   overflow-wrap:anywhere;
 }
 
+/* ---------- tree colors ---------- */
 .t-base{ color:var(--c-base); }
 .t-ab{ color:var(--c-ab); }
 .t-stun{ color:var(--c-stun); }
@@ -251,6 +263,7 @@ pre{
 .t-flying{ color:var(--c-flying); }
 .t-mondmg{ color:var(--c-mondmg); }
 .t-pick{ color:var(--c-pick); }
+.t-heroatk{ color:var(--c-heroatk); }
 .t-dim{ color:rgba(231,231,234,0.55); }
 
 .seg{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
@@ -261,6 +274,87 @@ pre{
 }
 .copyRow{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
 .toast{ margin-top:8px; font-size:12px; color:var(--muted); }
+
+/* ---------- tooltip ---------- */
+.labelRow{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+}
+.tip{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  border:1px solid var(--line2);
+  background:rgba(255,255,255,0.03);
+  color:var(--muted);
+  font-size:12px;
+  line-height:1;
+  cursor:help;
+  flex:0 0 auto;
+  margin-top:1px;
+}
+.tip:focus{ outline:none; border-color:#3a4252; }
+
+.tipBox{
+  position:absolute;
+  left:0;
+  top:22px;
+  z-index:50;
+  width:min(320px, 72vw);
+  padding:10px 10px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#0b0e13;
+  color:var(--text);
+  font-size:12px;
+  line-height:1.5;
+  box-shadow:0 10px 30px rgba(0,0,0,0.45);
+  display:none;
+}
+.tipBox b{ color:var(--acc); font-weight:600; }
+.tipBox .muted{ color:var(--muted); }
+.tip:hover .tipBox,
+.tip:focus .tipBox,
+.tip.isOpen .tipBox{
+  display:block;
+}
+
+/* ---------- Accordion blocks ---------- */
+details.accordion{
+  margin-top:0;
+  padding:0;
+  background:transparent;
+  border:0;
+}
+details.accordion + details.accordion{ margin-top:12px; }
+
+details.accordion > summary{
+  color:var(--text);
+  font-size:14px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+}
+details.accordion > summary .mini{
+  color:var(--muted);
+  font-size:12px;
+}
+details.accordion > summary .chev{
+  color:var(--muted);
+  font-size:12px;
+}
+details.accordion .accBody{
+  margin-top:10px;
+}
+
+/* 内側のdetails */
+.innerDetails{ margin-top:10px; }
 </style>
 </head>
 
@@ -268,171 +362,360 @@ pre{
 <div class="wrap">
   <div class="top">
     <h1>ダメージ計算機</h1>
-    <span class="tag">スマホ互換（replaceAll/?.なし）</span>
-    <span class="tag">テキスト入力 初期未入力</span>
-    <span class="tag">ツルハシ ATK増加</span>
   </div>
 
   <div class="grid">
     <div class="card">
-      <div class="sectionTitle">
-        <h2>基本情報</h2>
-        <div class="mini">攻撃力・クリティカル</div>
-      </div>
 
-      <div class="row">
-        <label>攻撃力（ATK）</label>
-        <input id="atk" type="number" value="" placeholder="未入力なら0" min="0" step="1">
-      </div>
+      <!-- ★ 英雄（基本情報の上） -->
+      <details class="accordion" open>
+        <summary>
+          <span>英雄</span>
+          <span class="mini">選択・レベル</span>
+          <span class="chev">▼</span>
+        </summary>
+        <div class="accBody">
 
-      <div class="row">
-        <label>クリティカル率（%）</label>
-        <input id="cr" type="number" value="" placeholder="未入力なら0" min="0" max="100" step="0.1">
-      </div>
+          <div class="row">
+            <label>英雄</label>
+            <select id="heroSelect">
+              <option value="">（未選択）</option>
+              <option value="thor">トール</option>
+              <option value="anubis">アヌビス</option>
+              <option value="plague_doctor">疫病医</option>
+              <option value="bear_salmon">サーモンを食べる熊</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
 
-      <div class="row">
-        <label>クリティカルダメージ（%）<br><span class="small">例：+1012% → 1012</span></label>
-        <input id="cd" type="number" value="" placeholder="未入力なら0" min="0" step="0.1">
-      </div>
+          <div class="row">
+            <label>レベル</label>
+            <select id="heroLevel">
+              <option value="">（未選択）</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="12+">12以上</option>
+            </select>
+            <div class="small" style="margin-top:6px;">
+              ※今は表示・保存のみ（計算ロジックには未反映）
+            </div>
+          </div>
 
-      <div class="row">
-        <label>モンスターが受けるダメージが増加（%）<br><span class="small">例：400% → 400（= 5.0倍）</span></label>
-        <input id="monDmg" type="number" value="" placeholder="未入力なら0" min="0" step="1">
-      </div>
-
-      <div class="sectionTitle" style="margin-top:14px;">
-        <h2>ツルハシ</h2>
-        <div class="mini">所持数 × X% だけ全体ATK増加（ATKに乗算）</div>
-      </div>
-
-      <div class="row">
-        <label>ツルハシの所持数</label>
-        <input id="pickCount" type="number" value="" placeholder="未入力なら0" min="0" step="1">
-      </div>
-
-      <div class="row">
-        <label>タワーリストにあるツルハシの数だけX％全体の攻撃力増加<br><span class="small">X（% / 1本）</span></label>
-        <input id="pickPct" type="number" value="" placeholder="未入力なら0" min="0" step="0.1">
-      </div>
-
-      <div class="sectionTitle" style="margin-top:14px;">
-        <h2>状態異常</h2>
-        <div class="mini">※免疫は状態異常数に含めない / リスト表示もしない</div>
-      </div>
-
-      <div class="checkGrid">
-        <div class="checkItem"><div class="checkRow">
-          <input id="ab_bleed" class="ab" data-key="bleed" type="checkbox">
-          <label class="checkText" for="ab_bleed">出血</label>
-        </div></div>
-
-        <div class="checkItem"><div class="checkRow">
-          <input id="ab_stun" class="ab" data-key="stun" type="checkbox">
-          <label class="checkText" for="ab_stun">スタン</label>
-        </div></div>
-
-        <div class="checkItem"><div class="checkRow">
-          <input id="ab_poison" class="ab" data-key="poison" type="checkbox">
-          <label class="checkText" for="ab_poison">中毒</label>
-        </div></div>
-
-        <div class="checkItem"><div class="checkRow">
-          <input id="ab_burn" class="ab" data-key="burn" type="checkbox">
-          <label class="checkText" for="ab_burn">火傷</label>
-        </div></div>
-
-        <div class="checkItem"><div class="checkRow">
-          <input id="ab_slow" class="ab" data-key="slow" type="checkbox">
-          <label class="checkText" for="ab_slow">移動速度減少（長文でも折り返しOK）</label>
-        </div></div>
-
-        <div class="checkItem"><div class="checkRow">
-          <input id="ab_immune" class="ab" data-key="immune" type="checkbox">
-          <label class="checkText" for="ab_immune">免疫（状態異常数に含めない / リスト表示もしない）</label>
-        </div></div>
-      </div>
-
-      <div class="row" style="margin-top:12px;">
-        <label>状態異常1つごとのダメージ（%）</label>
-        <input id="abPer" type="number" value="" placeholder="未入力なら0" min="0" step="1">
-      </div>
-
-      <div class="sectionTitle" style="margin-top:14px;">
-        <h2>対象条件</h2>
-        <div class="mini">飛行は状態異常数に含めない</div>
-      </div>
-
-      <div class="checkGrid">
-        <div class="checkItem"><div class="checkRow">
-          <input id="cond_flying" class="cond" type="checkbox">
-          <label class="checkText" for="cond_flying">飛行（対象）</label>
-        </div></div>
-      </div>
-
-      <details id="acc_stun">
-        <summary><span>スタン追撃 <span class="badge">各種</span></span><span>条件: スタン</span></summary>
-        <div class="dimNote">スタンがOFFのため不適用（半透明・操作不可）</div>
-        <div class="stack" id="list_stun"></div>
-        <div class="btnRow"><button type="button" data-add="stun">追加</button><button type="button" data-clear="stun">全削除</button></div>
+        </div>
       </details>
 
-      <details id="acc_slow">
-        <summary><span>スロー追撃 <span class="badge">各種</span></span><span>条件: 移動速度減少</span></summary>
-        <div class="dimNote">移動速度減少がOFFのため不適用（半透明・操作不可）</div>
-        <div class="stack" id="list_slow"></div>
-        <div class="btnRow"><button type="button" data-add="slow">追加</button><button type="button" data-clear="slow">全削除</button></div>
+      <!-- 基本情報 Accordion -->
+      <details class="accordion" open>
+        <summary>
+          <span>基本情報</span>
+          <span class="mini">攻撃力・クリティカル</span>
+          <span class="chev">▼</span>
+        </summary>
+        <div class="accBody">
+
+          <div class="row">
+            <label>
+              <div class="labelRow">
+                <span>攻撃力（ATK）</span>
+                <span class="tip" tabindex="0" role="button" aria-label="攻撃力（ATK）の説明">
+                  ⓘ
+                  <span class="tipBox">
+                    <b>攻撃力（ATK）</b><br>
+                    入力欄の右で <b>K/M/B/T/Qa/Qi/E</b> を選べます。<br>
+                    <span class="muted">例：20 + K → 20,000</span><br>
+                    <span class="muted">未入力の場合は 0 扱い。</span>
+                  </span>
+                </span>
+              </div>
+            </label>
+
+            <div class="inputGroup">
+              <input id="atk" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+              <select id="atkUnit" class="unitSelect" aria-label="ATK単位">
+                <option value="1">（なし）</option>
+                <option value="1e3">K</option>
+                <option value="1e6">M</option>
+                <option value="1e9">B</option>
+                <option value="1e12">T</option>
+                <option value="1e15">Qa</option>
+                <option value="1e18">Qi</option>
+                <option value="1e18">E</option>
+              </select>
+            </div>
+            <div class="small" style="margin-top:6px;">
+              ※ E は 10^18 として扱います（Qi も同じ倍率）
+            </div>
+          </div>
+
+          <div class="row">
+            <label>
+              <div class="labelRow">
+                <span>英雄の攻撃力 50%増加 × 回数</span>
+                <span class="tip" tabindex="0" role="button" aria-label="英雄の攻撃力50%増加×回数の説明">
+                  ⓘ
+                  <span class="tipBox">
+                    <b>英雄の攻撃力 50%増加 × 回数</b><br>
+                    1回につき<b>攻撃力が +50%</b>される想定で、<b>ATKに乗算</b>します。<br>
+                    <span class="muted">倍率 = 1 + 0.5 × 回数</span>
+                  </span>
+                </span>
+              </div>
+            </label>
+            <input id="heroAtk50Count" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+          </div>
+
+          <div class="row">
+            <label>
+              <div class="labelRow">
+                <span>クリティカル率（%）</span>
+                <span class="tip" tabindex="0" role="button" aria-label="クリティカル率（%）の説明">
+                  ⓘ
+                  <span class="tipBox">
+                    <b>クリティカル率（%）</b><br>
+                    <b>ダンジョン入場以降</b>のステータス記載の<b>クリティカル率</b>を入力してください。<br>
+                    <span class="muted">0〜100の範囲で入力。</span>
+                  </span>
+                </span>
+              </div>
+            </label>
+            <input id="cr" type="number" value="" placeholder="未入力なら0" min="0" max="100" step="0.1">
+          </div>
+
+          <div class="row">
+            <label>
+              <div class="labelRow">
+                <span>クリティカルダメージ（%）<br><span class="small">例：+1012% → 1012</span></span>
+                <span class="tip" tabindex="0" role="button" aria-label="クリティカルダメージ（%）の説明">
+                  ⓘ
+                  <span class="tipBox">
+                    <b>クリティカルダメージ（%）</b><br>
+                    <b>ダンジョン入場以降</b>のステータス記載の<b>クリティカルダメージ</b>を入力してください。<br>
+                    <span class="muted">例：+1012% → 1012</span>
+                  </span>
+                </span>
+              </div>
+            </label>
+            <input id="cd" type="number" value="" placeholder="未入力なら0" min="0" step="0.1">
+          </div>
+
+          <div class="row">
+            <label>モンスターが受けるダメージが増加（%）<br><span class="small">例：400% → 400（= 5.0倍）</span></label>
+            <input id="monDmg" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+          </div>
+
+        </div>
       </details>
 
-      <details id="acc_bleed">
-        <summary><span>出血追撃 <span class="badge">各種</span></span><span>条件: 出血</span></summary>
-        <div class="dimNote">出血がOFFのため不適用（半透明・操作不可）</div>
-        <div class="stack" id="list_bleed"></div>
-        <div class="btnRow"><button type="button" data-add="bleed">追加</button><button type="button" data-clear="bleed">全削除</button></div>
+      <!-- ツルハシ Accordion -->
+      <details class="accordion" open>
+        <summary>
+          <span>ツルハシ</span>
+          <span class="mini">所持数 × X% だけ全体ATK増加（ATKに乗算）</span>
+          <span class="chev">▼</span>
+        </summary>
+        <div class="accBody">
+
+          <div class="row">
+            <label>ツルハシの所持数</label>
+            <input id="pickCount" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+          </div>
+
+          <div class="row">
+            <label>タワーリストにあるツルハシの数だけX％全体の攻撃力増加<br><span class="small">X（% / 1本）</span></label>
+            <input id="pickPct" type="number" value="" placeholder="未入力なら0" min="0" step="0.1">
+          </div>
+
+        </div>
       </details>
 
-      <details id="acc_poison">
-        <summary><span>中毒追撃 <span class="badge">各種</span></span><span>条件: 中毒</span></summary>
-        <div class="dimNote">中毒がOFFのため不適用（半透明・操作不可）</div>
-        <div class="stack" id="list_poison"></div>
-        <div class="btnRow"><button type="button" data-add="poison">追加</button><button type="button" data-clear="poison">全削除</button></div>
+      <!-- 状態異常 Accordion -->
+      <details class="accordion" open>
+        <summary>
+          <span>状態異常</span>
+          <span class="mini">※免疫は状態異常数に含めない / リスト表示もしない</span>
+          <span class="chev">▼</span>
+        </summary>
+        <div class="accBody">
+
+          <div class="checkGrid">
+            <div class="checkItem"><div class="checkRow">
+              <input id="ab_bleed" class="ab" data-key="bleed" type="checkbox">
+              <label class="checkText" for="ab_bleed">出血</label>
+            </div></div>
+
+            <div class="checkItem"><div class="checkRow">
+              <input id="ab_stun" class="ab" data-key="stun" type="checkbox">
+              <label class="checkText" for="ab_stun">スタン</label>
+            </div></div>
+
+            <div class="checkItem"><div class="checkRow">
+              <input id="ab_poison" class="ab" data-key="poison" type="checkbox">
+              <label class="checkText" for="ab_poison">中毒</label>
+            </div></div>
+
+            <div class="checkItem"><div class="checkRow">
+              <input id="ab_burn" class="ab" data-key="burn" type="checkbox">
+              <label class="checkText" for="ab_burn">火傷</label>
+            </div></div>
+
+            <div class="checkItem"><div class="checkRow">
+              <input id="ab_slow" class="ab" data-key="slow" type="checkbox">
+              <label class="checkText" for="ab_slow">移動速度減少（長文でも折り返しOK）</label>
+            </div></div>
+
+            <div class="checkItem"><div class="checkRow">
+              <input id="ab_immune" class="ab" data-key="immune" type="checkbox">
+              <label class="checkText" for="ab_immune">免疫（状態異常数に含めない / リスト表示もしない）</label>
+            </div></div>
+          </div>
+
+          <div class="row" style="margin-top:12px;">
+            <label>状態異常1つごとのダメージ（%）</label>
+            <input id="abPer" type="number" value="" placeholder="未入力なら0" min="0" step="1">
+          </div>
+
+        </div>
       </details>
 
-      <details id="acc_burn">
-        <summary><span>火傷追撃 <span class="badge">各種</span></span><span>条件: 火傷</span></summary>
-        <div class="dimNote">火傷がOFFのため不適用（半透明・操作不可）</div>
-        <div class="stack" id="list_burn"></div>
-        <div class="btnRow"><button type="button" data-add="burn">追加</button><button type="button" data-clear="burn">全削除</button></div>
+      <!-- 対象条件 Accordion（飛行チェック + 飛行追撃を内包） -->
+      <details class="accordion" open>
+        <summary>
+          <span>対象条件</span>
+          <span class="mini">飛行は状態異常数に含めない</span>
+          <span class="chev">▼</span>
+        </summary>
+        <div class="accBody">
+
+          <div class="checkGrid">
+            <div class="checkItem"><div class="checkRow">
+              <input id="cond_flying" class="cond" type="checkbox">
+              <label class="checkText" for="cond_flying">飛行（対象）</label>
+            </div></div>
+          </div>
+
+          <details id="acc_flying" class="innerDetails">
+            <summary><span>飛行追撃 <span class="badge">各種</span></span><span>条件: 飛行（対象）</span></summary>
+            <div class="dimNote">飛行（対象）がOFFのため不適用（半透明・操作不可）</div>
+            <div class="stack" id="list_flying"></div>
+            <div class="btnRow"><button type="button" data-add="flying">追加</button><button type="button" data-clear="flying">全削除</button></div>
+          </details>
+
+        </div>
       </details>
 
-      <details id="acc_immune">
-        <summary><span>免疫追撃 <span class="badge">各種</span></span><span>条件: 免疫</span></summary>
-        <div class="dimNote">免疫がOFFのため不適用（半透明・操作不可）</div>
-        <div class="stack" id="list_immune"></div>
-        <div class="btnRow"><button type="button" data-add="immune">追加</button><button type="button" data-clear="immune">全削除</button></div>
+      <!-- 追撃（状態異常）まとめ -->
+      <details class="accordion" open>
+        <summary>
+          <span>追撃（状態異常）</span>
+          <span class="mini">条件OFF時は半透明・操作不可</span>
+          <span class="chev">▼</span>
+        </summary>
+        <div class="accBody">
+
+          <details id="acc_stun" class="innerDetails">
+            <summary><span>スタン追撃 <span class="badge">各種</span></span><span>条件: スタン</span></summary>
+            <div class="dimNote">スタンがOFFのため不適用（半透明・操作不可）</div>
+            <div class="stack" id="list_stun"></div>
+            <div class="btnRow"><button type="button" data-add="stun">追加</button><button type="button" data-clear="stun">全削除</button></div>
+          </details>
+
+          <details id="acc_slow" class="innerDetails">
+            <summary><span>スロー追撃 <span class="badge">各種</span></span><span>条件: 移動速度減少</span></summary>
+            <div class="dimNote">移動速度減少がOFFのため不適用（半透明・操作不可）</div>
+            <div class="stack" id="list_slow"></div>
+            <div class="btnRow"><button type="button" data-add="slow">追加</button><button type="button" data-clear="slow">全削除</button></div>
+          </details>
+
+          <details id="acc_bleed" class="innerDetails">
+            <summary><span>出血追撃 <span class="badge">各種</span></span><span>条件: 出血</span></summary>
+            <div class="dimNote">出血がOFFのため不適用（半透明・操作不可）</div>
+            <div class="stack" id="list_bleed"></div>
+            <div class="btnRow"><button type="button" data-add="bleed">追加</button><button type="button" data-clear="bleed">全削除</button></div>
+          </details>
+
+          <details id="acc_poison" class="innerDetails">
+            <summary><span>中毒追撃 <span class="badge">各種</span></span><span>条件: 中毒</span></summary>
+            <div class="dimNote">中毒がOFFのため不適用（半透明・操作不可）</div>
+            <div class="stack" id="list_poison"></div>
+            <div class="btnRow"><button type="button" data-add="poison">追加</button><button type="button" data-clear="poison">全削除</button></div>
+          </details>
+
+          <details id="acc_burn" class="innerDetails">
+            <summary><span>火傷追撃 <span class="badge">各種</span></span><span>条件: 火傷</span></summary>
+            <div class="dimNote">火傷がOFFのため不適用（半透明・操作不可）</div>
+            <div class="stack" id="list_burn"></div>
+            <div class="btnRow"><button type="button" data-add="burn">追加</button><button type="button" data-clear="burn">全削除</button></div>
+          </details>
+
+          <details id="acc_immune" class="innerDetails">
+            <summary><span>免疫追撃 <span class="badge">各種</span></span><span>条件: 免疫</span></summary>
+            <div class="dimNote">免疫がOFFのため不適用（半透明・操作不可）</div>
+            <div class="stack" id="list_immune"></div>
+            <div class="btnRow"><button type="button" data-add="immune">追加</button><button type="button" data-clear="immune">全削除</button></div>
+          </details>
+
+        </div>
       </details>
 
-      <details id="acc_flying">
-        <summary><span>飛行追撃 <span class="badge">各種</span></span><span>条件: 飛行（対象）</span></summary>
-        <div class="dimNote">飛行（対象）がOFFのため不適用（半透明・操作不可）</div>
-        <div class="stack" id="list_flying"></div>
-        <div class="btnRow"><button type="button" data-add="flying">追加</button><button type="button" data-clear="flying">全削除</button></div>
-      </details>
     </div>
 
     <div class="card">
+
+      <!-- ★ 表示形式（単位あり/なし/両方） -->
+      <div class="row" style="margin-top:0;">
+        <label>表示形式（ダメージ/ATKなど）</label>
+        <select id="numFormat">
+          <option value="plain">単位なし（カンマ）</option>
+          <option value="unit">単位あり（K/M/B/T/Qa/Qi）</option>
+          <option value="both">両方（カンマ + 単位）</option>
+        </select>
+      </div>
+
       <div class="kpi">
         <div class="box">
-          <div class="small">基本1発期待ダメ</div>
-          <div id="outBase" class="mono v">-</div>
+          <div class="small">基本1発（通常 / 非クリ）</div>
+          <div id="outBaseNormal" class="mono v">-</div>
         </div>
+        <div class="box">
+          <div class="small">基本1発（クリティカル）</div>
+          <div id="outBaseCrit" class="mono v">-</div>
+        </div>
+
+        <div class="box">
+          <div class="small">平均1発（CR考慮）</div>
+          <div id="outBaseExp" class="mono v">-</div>
+          <div id="noteBaseExp" class="note" style="display:none;"></div>
+        </div>
+
         <div class="box">
           <div class="small">状態異常数（免疫除外）</div>
           <div id="outAbCount" class="mono v">-</div>
           <div id="outAbList" class="small mono">-</div>
         </div>
+
         <div class="box">
-          <div class="small">最終1発ダメージ</div>
-          <div id="outFinal" class="mono v">-</div>
+          <div class="small">最終1発（通常 / 非クリ）</div>
+          <div id="outFinalNormal" class="mono v">-</div>
+        </div>
+        <div class="box">
+          <div class="small">最終1発（クリティカル）</div>
+          <div id="outFinalCrit" class="mono v">-</div>
+        </div>
+
+        <div class="box" style="grid-column:1/-1;">
+          <div class="small">最終 平均1発（CR考慮）</div>
+          <div id="outFinalExp" class="mono v">-</div>
+          <div id="noteFinalExp" class="note" style="display:none;"></div>
         </div>
       </div>
 
@@ -466,12 +749,61 @@ pre{
 function $(id){ return document.getElementById(id); }
 function $$(q){ return Array.prototype.slice.call(document.querySelectorAll(q)); }
 
-function fmtInt(n){
+/* ----------------------------
+   Number Format (plain / unit / both)
+   ※ unit のときは小数2桁固定
+---------------------------- */
+function fmtPlain(n){
   if(!isFinite(n)) return "-";
   return Math.round(n).toLocaleString("ja-JP");
 }
 
-/* iOS古め対策：replaceAll/optional chaining を使わない */
+function fmtFixed2(x){
+  if(!isFinite(x)) return "-";
+  return Number(x).toFixed(2);
+}
+
+function fmtUnit(n){
+  if(!isFinite(n)) return "-";
+  var sign = n < 0 ? "-" : "";
+  var a = Math.abs(n);
+
+  if(a < 1000){
+    return sign + fmtFixed2(a);
+  }
+
+  // 1e18 は Qi に統一して表示（入力は Qi/E どちらでも可）
+  var units = [
+    {u:"Qi", v:1e18},
+    {u:"Qa", v:1e15},
+    {u:"T",  v:1e12},
+    {u:"B",  v:1e9},
+    {u:"M",  v:1e6},
+    {u:"K",  v:1e3}
+  ];
+
+  var pick = units[units.length - 1];
+  for(var i=0;i<units.length;i++){
+    if(a >= units[i].v){
+      pick = units[i];
+      break;
+    }
+  }
+
+  var x = a / pick.v;
+  return sign + fmtFixed2(x) + pick.u;
+}
+
+function fmtNum(n){
+  var mode = ($("numFormat") && $("numFormat").value) ? $("numFormat").value : "plain";
+  if(mode === "unit") return fmtUnit(n);
+  if(mode === "both"){
+    if(!isFinite(n)) return "-";
+    return fmtPlain(n) + " (" + fmtUnit(n) + ")";
+  }
+  return fmtPlain(n);
+}
+
 function escapeHtml(s){
   s = String(s);
   s = s.replace(/&/g,"&amp;");
@@ -483,10 +815,26 @@ function escapeHtml(s){
 }
 
 function trimZero4(x){
-  // 1.2300 -> 1.23 / 1.0000 -> 1
   var s = String(x.toFixed(4));
   s = s.replace(/0+$/,"").replace(/\.$/,"");
   return s;
+}
+
+/* 単位: K/M/B/T/Qa/Qi/E (ATK入力用) */
+function unitLabelFromMult(mult){
+  if(mult===1) return "";
+  if(mult===1e3) return "K";
+  if(mult===1e6) return "M";
+  if(mult===1e9) return "B";
+  if(mult===1e12) return "T";
+  if(mult===1e15) return "Qa";
+  if(mult===1e18) return "Qi/E";
+  return "x"+String(mult);
+}
+function parseUnitMult(v){
+  var m = Number(v);
+  if(!isFinite(m) || m<=0) m = 1;
+  return m;
 }
 
 function makeRow(kind, name, pct){
@@ -527,7 +875,17 @@ function sumPct(entries){
   for(var i=0;i<entries.length;i++) a += (Number(entries[i].pct)||0);
   return a;
 }
-function multFromSum(sum){ return 1 + Math.max(0, sum) / 100; }
+
+function abLabel(key){
+  // 表示用（KPIのリストを日本語に）
+  if(key==="bleed") return "出血";
+  if(key==="stun") return "スタン";
+  if(key==="poison") return "中毒";
+  if(key==="burn") return "火傷";
+  if(key==="slow") return "移動速度減少";
+  if(key==="immune") return "免疫";
+  return key;
+}
 
 function getAbnormal(){
   var checked = [];
@@ -538,7 +896,11 @@ function getAbnormal(){
   var count = 0;
   var listed = [];
   for(var j=0;j<checked.length;j++){
-    if(checked[j] !== "immune"){ count++; listed.push(checked[j]); }
+    // 免疫は「状態異常数」に含めない、かつリストにも出さない
+    if(checked[j] !== "immune"){
+      count++;
+      listed.push(abLabel(checked[j]));
+    }
   }
   return { checked:checked, count:count, listed:listed };
 }
@@ -606,7 +968,6 @@ function saveState(){
   try{
     var state = { v: 1, t: Date.now(), inputs: {}, lists: {}, treeMode: (window.__TREE_MODE__||"color") };
 
-    // inputs with id
     var nodes = $$("input[id], select[id], textarea[id]");
     for(var i=0;i<nodes.length;i++){
       var el = nodes[i];
@@ -621,7 +982,6 @@ function saveState(){
       }
     }
 
-    // lists (現行UIのkindに合わせる)
     var kinds = ["stun","slow","bleed","poison","burn","immune","flying"];
     for(var k=0;k<kinds.length;k++){
       var kind = kinds[k];
@@ -629,9 +989,7 @@ function saveState(){
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }catch(e){
-    // ignore
-  }
+  }catch(e){}
 }
 
 function loadState(){
@@ -643,7 +1001,6 @@ function loadState(){
 
     if(state.treeMode) window.__TREE_MODE__ = state.treeMode;
 
-    // restore inputs
     for(var id in state.inputs){
       if(!Object.prototype.hasOwnProperty.call(state.inputs, id)) continue;
       var item = state.inputs[id];
@@ -656,7 +1013,6 @@ function loadState(){
       }
     }
 
-    // restore lists
     if(state.lists){
       for(var kind in state.lists){
         if(!Object.prototype.hasOwnProperty.call(state.lists, kind)) continue;
@@ -669,9 +1025,7 @@ function loadState(){
         }
       }
     }
-  }catch(e){
-    // ignore
-  }
+  }catch(e){}
 }
 
 function clearSaved(){
@@ -679,10 +1033,46 @@ function clearSaved(){
 }
 
 /* ----------------------------
+   Notes for Expected (CR)
+---------------------------- */
+function setExpectedNotes(cr01){
+  var b = $("noteBaseExp");
+  var f = $("noteFinalExp");
+  if(!b || !f) return;
+
+  var show = false;
+  var txt = "";
+
+  var near0 = (Math.abs(cr01 - 0) < 1e-12);
+  var near1 = (Math.abs(cr01 - 1) < 1e-12);
+
+  if(near1){
+    show = true;
+    txt = "※ CR=100% のため、平均 = クリティカルと同じ";
+  }else if(near0){
+    show = true;
+    txt = "※ CR=0% のため、平均 = 通常（非クリ）と同じ";
+  }else{
+    show = false;
+  }
+
+  b.style.display = show ? "" : "none";
+  f.style.display = show ? "" : "none";
+  b.textContent = txt;
+  f.textContent = txt;
+}
+
+/* ----------------------------
    Main Calc
 ---------------------------- */
 function calc(){
+  var heroKey = ($("heroSelect").value || "");
+  var heroLevelRaw = ($("heroLevel").value || "");
+
   var atkRaw = $("atk").value;
+  var atkUnitRaw = $("atkUnit").value;
+
+  var heroAtk50CountRaw = $("heroAtk50Count").value;
   var crRaw  = $("cr").value;
   var cdRaw  = $("cd").value;
   var monRaw = $("monDmg").value;
@@ -691,7 +1081,15 @@ function calc(){
   var pickCountRaw = $("pickCount").value;
   var pickPctRaw   = $("pickPct").value;
 
-  var atk = Math.max(0, Number((atkRaw === "" ? 0 : atkRaw) || 0));
+  var atkInput = Math.max(0, Number((atkRaw === "" ? 0 : atkRaw) || 0));
+  var atkUnitMult = parseUnitMult(atkUnitRaw);
+  var atkUnitLabel = unitLabelFromMult(atkUnitMult);
+
+  var atk = atkInput * atkUnitMult;
+
+  var heroAtk50Count = Math.max(0, Math.floor(Number((heroAtk50CountRaw === "" ? 0 : heroAtk50CountRaw) || 0)));
+  var heroAtkMult = 1 + (0.5 * heroAtk50Count);
+
   var cr  = Math.min(100, Math.max(0, Number((crRaw === "" ? 0 : crRaw) || 0))) / 100;
   var cd  = Math.max(0, Number((cdRaw === "" ? 0 : cdRaw) || 0)) / 100;
 
@@ -701,9 +1099,12 @@ function calc(){
   var pickCount = Math.max(0, Math.floor(Number((pickCountRaw === "" ? 0 : pickCountRaw) || 0)));
   var pickPctPer = Math.max(0, Number((pickPctRaw === "" ? 0 : pickPctRaw) || 0));
   var pickMult = 1 + (pickCount * (pickPctPer / 100));
-  var atkEff = atk * pickMult;
 
-  var base = atkEff * ((1 - cr) + (1 + cd) * cr);
+  var atkEff = atk * heroAtkMult * pickMult;
+
+  var baseNormal = atkEff;
+  var baseCrit   = atkEff * (1 + cd);
+  var baseAvg    = baseNormal * (1 - cr) + baseCrit * cr;
 
   var abPerPct = Math.max(0, Number((abPerRaw === "" ? 0 : abPerRaw) || 0));
   var ab = getAbnormal();
@@ -737,141 +1138,137 @@ function calc(){
     var k = kinds[i];
     entries[k] = listEntries(k);
     sums[k] = sumPct(entries[k]);
-    mults[k] = multFromSum(sums[k]);
+    mults[k] = 1 + Math.max(0, sums[k]) / 100;
     used[k] = apply[k] ? mults[k] : 1;
   }
 
-  var final =
-    base * monDmgMult * abMult *
+  var factorAll =
+    monDmgMult * abMult *
     used.stun * used.slow * used.bleed * used.poison * used.burn *
     used.immune * used.flying;
 
-  $("outBase").textContent = fmtInt(base);
+  var finalNormal = baseNormal * factorAll;
+  var finalCrit   = baseCrit   * factorAll;
+  var finalAvg    = baseAvg    * factorAll;
+
+  $("outBaseNormal").textContent = fmtNum(baseNormal);
+  $("outBaseCrit").textContent   = fmtNum(baseCrit);
+  $("outBaseExp").textContent    = fmtNum(baseAvg);
+
   $("outAbCount").textContent = String(ab.count);
   $("outAbList").textContent = (ab.listed.length ? ab.listed.join(" / ") : "(なし)");
-  $("outFinal").textContent = fmtInt(final);
+
+  $("outFinalNormal").textContent = fmtNum(finalNormal);
+  $("outFinalCrit").textContent   = fmtNum(finalCrit);
+  $("outFinalExp").textContent    = fmtNum(finalAvg);
+
+  setExpectedNotes(cr);
 
   var tHtml = "";
   var tText = "";
 
-  tHtml += treeLineHtml("t-base", "Final = Base × MonsterTaken × Abnormal × (追撃各種...)");
+  tHtml += treeLineHtml("t-base", "Final（平均） = Base（平均/CR考慮） × MonsterTaken × Abnormal × (追撃各種...)");
+  tHtml += treeLineHtml("t-base", "Final（通常/クリ）も同じ係数（FactorAll）を掛けたもの");
   tHtml += treeLineHtml("t-base", "");
-  tText += treeLineText("Final = Base × MonsterTaken × Abnormal × (追撃各種...)");
+  tText += treeLineText("Final（平均） = Base（平均/CR考慮） × MonsterTaken × Abnormal × (追撃各種...)");
+  tText += treeLineText("Final（通常/クリ）も同じ係数（FactorAll）を掛けたもの");
+  tText += treeLineText("");
+
+  tHtml += treeLineHtml("t-base", "Hero（表示用）");
+  tHtml += treeLineHtml("t-base", "├─ hero = " + (heroKey ? heroKey : "(未選択)"));
+  tHtml += treeLineHtml("t-base", "└─ level = " + (heroLevelRaw ? heroLevelRaw : "(未選択)"));
+  tHtml += treeLineHtml("t-base", "");
+  tText += treeLineText("Hero（表示用）");
+  tText += treeLineText("├─ hero = " + (heroKey ? heroKey : "(未選択)"));
+  tText += treeLineText("└─ level = " + (heroLevelRaw ? heroLevelRaw : "(未選択)"));
+  tText += treeLineText("");
+
+  tHtml += treeLineHtml("t-heroatk", "HeroATK +50% × 回数（ATKに乗算）");
+  tHtml += treeLineHtml("t-heroatk", "├─ count = " + heroAtk50Count);
+  tHtml += treeLineHtml("t-heroatk", "└─ HeroATKMult = 1 + 0.5×count = " + trimZero4(heroAtkMult) + "x");
+  tHtml += treeLineHtml("t-base", "");
+  tText += treeLineText("HeroATK +50% × 回数（ATKに乗算）");
+  tText += treeLineText("├─ count = " + heroAtk50Count);
+  tText += treeLineText("└─ HeroATKMult = 1 + 0.5×count = " + trimZero4(heroAtkMult) + "x");
   tText += treeLineText("");
 
   tHtml += treeLineHtml("t-pick", "Pickaxe（ツルハシATK増加）");
   tHtml += treeLineHtml("t-pick", "├─ count = " + pickCount);
   tHtml += treeLineHtml("t-pick", "├─ per = " + pickPctPer + "% / 本");
-  tHtml += treeLineHtml("t-pick", "├─ PickaxeMult = 1 + count×per/100 = " + trimZero4(pickMult) + "x");
-  tHtml += treeLineHtml("t-pick", "└─ ATK effective = " + fmtInt(atk) + " × " + trimZero4(pickMult) + " = " + fmtInt(atkEff));
+  tHtml += treeLineHtml("t-pick", "└─ PickaxeMult = 1 + count×per/100 = " + trimZero4(pickMult) + "x");
   tHtml += treeLineHtml("t-base", "");
-
   tText += treeLineText("Pickaxe（ツルハシATK増加）");
   tText += treeLineText("├─ count = " + pickCount);
   tText += treeLineText("├─ per = " + pickPctPer + "% / 本");
-  tText += treeLineText("├─ PickaxeMult = 1 + count×per/100 = " + trimZero4(pickMult) + "x");
-  tText += treeLineText("└─ ATK effective = " + fmtInt(atk) + " × " + trimZero4(pickMult) + " = " + fmtInt(atkEff));
+  tText += treeLineText("└─ PickaxeMult = 1 + count×per/100 = " + trimZero4(pickMult) + "x");
   tText += treeLineText("");
 
-  tHtml += treeLineHtml("t-base", "Base");
-  tHtml += treeLineHtml("t-base", "├─ ATK(eff): " + fmtInt(atkEff) + " / CR: " + (cr*100).toFixed(1) + "% / CD: " + (cd*100).toFixed(1) + "%");
-  tHtml += treeLineHtml("t-base", "└─ Base = " + fmtInt(base));
+  tHtml += treeLineHtml("t-base", "Base（通常/クリ/平均）");
+  tHtml += treeLineHtml("t-base", "├─ ATK(input): " + String(atkInput) + (atkUnitLabel ? " " + atkUnitLabel : ""));
+  tHtml += treeLineHtml("t-base", "├─ ATK(abs): " + fmtNum(atk));
+  tHtml += treeLineHtml("t-heroatk", "├─ HeroATKMult: " + trimZero4(heroAtkMult) + "x");
+  tHtml += treeLineHtml("t-pick", "├─ PickaxeMult: " + trimZero4(pickMult) + "x");
+  tHtml += treeLineHtml("t-base", "├─ ATK(eff): " + fmtNum(atkEff));
+  tHtml += treeLineHtml("t-base", "├─ CR: " + (cr*100).toFixed(1) + "% / CD: " + (cd*100).toFixed(1) + "%");
+  tHtml += treeLineHtml("t-base", "├─ Base(通常) = ATK(eff) = " + fmtNum(baseNormal));
+  tHtml += treeLineHtml("t-base", "├─ Base(クリ) = ATK(eff)×(1+CD) = " + fmtNum(baseCrit));
+  tHtml += treeLineHtml("t-base", "└─ Base(平均) = 通常×(1-CR) + クリ×CR = " + fmtNum(baseAvg));
   tHtml += treeLineHtml("t-base", "");
 
-  tText += treeLineText("Base");
-  tText += treeLineText("├─ ATK(eff): " + fmtInt(atkEff) + " / CR: " + (cr*100).toFixed(1) + "% / CD: " + (cd*100).toFixed(1) + "%");
-  tText += treeLineText("└─ Base = " + fmtInt(base));
+  tText += treeLineText("Base（通常/クリ/平均）");
+  tText += treeLineText("├─ ATK(input): " + String(atkInput) + (atkUnitLabel ? " " + atkUnitLabel : ""));
+  tText += treeLineText("├─ ATK(abs): " + fmtNum(atk));
+  tText += treeLineText("├─ HeroATKMult: " + trimZero4(heroAtkMult) + "x");
+  tText += treeLineText("├─ PickaxeMult: " + trimZero4(pickMult) + "x");
+  tText += treeLineText("├─ ATK(eff): " + fmtNum(atkEff));
+  tText += treeLineText("├─ CR: " + (cr*100).toFixed(1) + "% / CD: " + (cd*100).toFixed(1) + "%");
+  tText += treeLineText("├─ Base(通常) = ATK(eff) = " + fmtNum(baseNormal));
+  tText += treeLineText("├─ Base(クリ) = ATK(eff)×(1+CD) = " + fmtNum(baseCrit));
+  tText += treeLineText("└─ Base(平均) = 通常×(1-CR) + クリ×CR = " + fmtNum(baseAvg));
   tText += treeLineText("");
 
-  tHtml += treeLineHtml("t-mondmg", "MonsterTaken（モンスターが受けるダメージ増加）");
-  tHtml += treeLineHtml("t-mondmg", "├─ +" + monDmgPct + "%");
-  tHtml += treeLineHtml("t-mondmg", "└─ MonsterTakenMult = " + trimZero4(monDmgMult) + "x");
-  tHtml += treeLineHtml("t-base", "");
+  tHtml += treeLineHtml("t-base", "Final（通常/クリ/平均）");
+  tHtml += treeLineHtml("t-base", "├─ FactorAll = MonsterTaken×Abnormal×追撃... = " + trimZero4(factorAll) + "x");
+  tHtml += treeLineHtml("t-base", "├─ Final(通常) = Base(通常)×FactorAll = " + fmtNum(finalNormal));
+  tHtml += treeLineHtml("t-base", "├─ Final(クリ) = Base(クリ)×FactorAll = " + fmtNum(finalCrit));
+  tHtml += treeLineHtml("t-base", "└─ Final(平均) = Base(平均)×FactorAll = " + fmtNum(finalAvg));
 
-  tText += treeLineText("MonsterTaken（モンスターが受けるダメージ増加）");
-  tText += treeLineText("├─ +" + monDmgPct + "%");
-  tText += treeLineText("└─ MonsterTakenMult = " + trimZero4(monDmgMult) + "x");
-  tText += treeLineText("");
-
-  tHtml += treeLineHtml("t-ab", "Abnormal（免疫除外）");
-  tHtml += treeLineHtml("t-ab", "├─ count = " + ab.count);
-  tHtml += treeLineHtml("t-ab", "├─ per = " + abPerPct + "%");
-  tHtml += treeLineHtml("t-ab", "└─ AbnormalMult = " + trimZero4(abMult) + "x");
-  tHtml += treeLineHtml("t-ab", "");
-
-  tText += treeLineText("Abnormal（免疫除外）");
-  tText += treeLineText("├─ count = " + ab.count);
-  tText += treeLineText("├─ per = " + abPerPct + "%");
-  tText += treeLineText("└─ AbnormalMult = " + trimZero4(abMult) + "x");
-  tText += treeLineText("");
-
-  function addFactor(title, key, cls, condName){
-    var isOn = !!apply[key];
-    var sum = sums[key];
-    var mult = mults[key];
-    var u = used[key];
-
-    tHtml += treeLineHtml(cls, title);
-    tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ 条件: " + condName + " → " + (isOn ? "適用" : "不適用"));
-    tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ Σ% = " + String(sum.toFixed(3)).replace(/\.?0+$/,"") + "%");
-    tHtml += treeLineHtml(isOn ? cls : "t-dim", "├─ Mult = " + trimZero4(mult) + "x");
-    tHtml += treeLineHtml(isOn ? cls : "t-dim", "└─ Used = " + trimZero4(u) + "x");
-    tHtml += treeLineHtml("t-base", "");
-
-    tText += treeLineText(title);
-    tText += treeLineText("├─ 条件: " + condName + " → " + (isOn ? "適用" : "不適用"));
-    tText += treeLineText("├─ Σ% = " + String(sum.toFixed(3)).replace(/\.?0+$/,"") + "%");
-    tText += treeLineText("├─ Mult = " + trimZero4(mult) + "x");
-    tText += treeLineText("└─ Used = " + trimZero4(u) + "x");
-    tText += treeLineText("");
-  }
-
-  addFactor("Stun 追撃（各種）", "stun", "t-stun", "スタンON");
-  addFactor("Slow 追撃（各種）", "slow", "t-slow", "移動速度減少ON");
-  addFactor("Bleed 追撃（各種）", "bleed", "t-bleed", "出血ON");
-  addFactor("Poison 追撃（各種）", "poison", "t-poison", "中毒ON");
-  addFactor("Burn 追撃（各種）", "burn", "t-burn", "火傷ON");
-  addFactor("Immune 追撃（各種）", "immune", "t-immune", "免疫ON");
-  addFactor("Flying 追撃（各種）", "flying", "t-flying", "飛行（対象）ON");
-
-  tHtml += treeLineHtml("t-base", "Final");
-  tHtml += treeLineHtml("t-base", "├─ Base: " + fmtInt(base));
-  tHtml += treeLineHtml("t-mondmg", "├─ MonsterTaken: " + trimZero4(monDmgMult) + "x");
-  tHtml += treeLineHtml("t-ab", "├─ Abnormal: " + trimZero4(abMult) + "x");
-  tHtml += treeLineHtml("t-stun", "├─ Stun: " + trimZero4(used.stun) + "x");
-  tHtml += treeLineHtml("t-slow", "├─ Slow: " + trimZero4(used.slow) + "x");
-  tHtml += treeLineHtml("t-bleed", "├─ Bleed: " + trimZero4(used.bleed) + "x");
-  tHtml += treeLineHtml("t-poison", "├─ Poison: " + trimZero4(used.poison) + "x");
-  tHtml += treeLineHtml("t-burn", "├─ Burn: " + trimZero4(used.burn) + "x");
-  tHtml += treeLineHtml("t-immune", "├─ Immune: " + trimZero4(used.immune) + "x");
-  tHtml += treeLineHtml("t-flying", "├─ Flying: " + trimZero4(used.flying) + "x");
-  tHtml += treeLineHtml("t-base", "└─ Final = " + fmtInt(final));
-
-  tText += treeLineText("Final");
-  tText += treeLineText("├─ Base: " + fmtInt(base));
-  tText += treeLineText("├─ MonsterTaken: " + trimZero4(monDmgMult) + "x");
-  tText += treeLineText("├─ Abnormal: " + trimZero4(abMult) + "x");
-  tText += treeLineText("├─ Stun: " + trimZero4(used.stun) + "x");
-  tText += treeLineText("├─ Slow: " + trimZero4(used.slow) + "x");
-  tText += treeLineText("├─ Bleed: " + trimZero4(used.bleed) + "x");
-  tText += treeLineText("├─ Poison: " + trimZero4(used.poison) + "x");
-  tText += treeLineText("├─ Burn: " + trimZero4(used.burn) + "x");
-  tText += treeLineText("├─ Immune: " + trimZero4(used.immune) + "x");
-  tText += treeLineText("├─ Flying: " + trimZero4(used.flying) + "x");
-  tText += treeLineText("└─ Final = " + fmtInt(final));
+  tText += treeLineText("Final（通常/クリ/平均）");
+  tText += treeLineText("├─ FactorAll = MonsterTaken×Abnormal×追撃... = " + trimZero4(factorAll) + "x");
+  tText += treeLineText("├─ Final(通常) = Base(通常)×FactorAll = " + fmtNum(finalNormal));
+  tText += treeLineText("├─ Final(クリ) = Base(クリ)×FactorAll = " + fmtNum(finalCrit));
+  tText += treeLineText("└─ Final(平均) = Base(平均)×FactorAll = " + fmtNum(finalAvg));
 
   $("treeColor").innerHTML = tHtml;
   $("treeText").textContent = tText;
 
   $("debug").textContent = JSON.stringify({
-    base: { atk:atk, atkEff:atkEff, pickCount:pickCount, pickPctPer:pickPctPer, pickMult:pickMult, cr:cr, cd:cd, base:base },
+    display: { numFormat: ($("numFormat").value || "plain") },
+    hero: { key: heroKey, level: heroLevelRaw },
+    atkInput: { value: atkInput, unitMult: atkUnitMult, unitLabel: atkUnitLabel, abs: atk },
+    base: {
+      heroAtk50Count: heroAtk50Count,
+      heroAtkMult: heroAtkMult,
+      atkEff:atkEff,
+      pickCount:pickCount,
+      pickPctPer:pickPctPer,
+      pickMult:pickMult,
+      cr:cr,
+      cd:cd,
+      baseNormal: baseNormal,
+      baseCrit: baseCrit,
+      baseAvg: baseAvg
+    },
     monsterTaken: { pct: monDmgPct, mult: monDmgMult },
     abnormal: { checked: ab.checked, listed: ab.listed, count: ab.count, perPct: abPerPct, mult: abMult },
     apply: apply,
     sums: sums,
     mults: mults,
     used: used,
-    final: final
+    factorAll: factorAll,
+    finalNormal: finalNormal,
+    finalCrit: finalCrit,
+    finalAvg: finalAvg
   }, null, 2);
 
   scheduleSave();
@@ -889,7 +1286,8 @@ function wireButtons(){
         var host = $("list_"+kind);
         if(!host) return;
         host.appendChild(makeRow(kind, "", ""));
-        $("acc_"+kind).open = true;
+        var det = $("acc_"+kind);
+        if(det) det.open = true;
         calc();
       });
     })(addBtns[i]);
@@ -914,7 +1312,6 @@ function wireTreeUI(){
   $("btnTreeText").addEventListener("click", function(){ setTreeMode("text"); });
 
   $("btnCopyTree").addEventListener("click", function(){
-    // コピーは純テキスト固定
     var txt = $("treeText").textContent || "";
     copyTextToClipboard(txt).then(function(ok){
       var toast = $("copyToast");
@@ -933,9 +1330,41 @@ function wireTreeUI(){
   });
 }
 
+/* Tooltip (tap open/close on mobile) */
+function wireTooltips(){
+  var tips = $$(".tip");
+  for(var i=0;i<tips.length;i++){
+    (function(t){
+      t.addEventListener("click", function(e){
+        e.stopPropagation();
+        var opened = $$(".tip.isOpen");
+        for(var k=0;k<opened.length;k++){
+          if(opened[k] !== t) opened[k].classList.remove("isOpen");
+        }
+        t.classList.toggle("isOpen");
+      });
+    })(tips[i]);
+  }
+
+  document.addEventListener("click", function(){
+    var opened = $$(".tip.isOpen");
+    for(var i=0;i<opened.length;i++) opened[i].classList.remove("isOpen");
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){
+      var opened = $$(".tip.isOpen");
+      for(var i=0;i<opened.length;i++) opened[i].classList.remove("isOpen");
+    }
+  });
+}
+
 /* input listeners */
-["atk","cr","cd","monDmg","pickCount","pickPct","abPer"].forEach(function(id){
+["atk","atkUnit","heroAtk50Count","cr","cd","monDmg","pickCount","pickPct","abPer","numFormat"].forEach(function(id){
   $(id).addEventListener("input", calc);
+  $(id).addEventListener("change", calc);
+});
+["heroSelect","heroLevel"].forEach(function(id){
   $(id).addEventListener("change", calc);
 });
 $$("input.ab").forEach(function(x){ x.addEventListener("change", calc); });
@@ -946,6 +1375,7 @@ window.addEventListener("pagehide", function(){ saveState(); });
 
 wireButtons();
 wireTreeUI();
+wireTooltips();
 loadState();
 setTreeMode(window.__TREE_MODE__||"color");
 calc();
